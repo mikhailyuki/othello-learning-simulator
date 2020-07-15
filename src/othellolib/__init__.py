@@ -1,1 +1,1 @@
-from src.othellolib import *
+from src.othellolib.logic import *
