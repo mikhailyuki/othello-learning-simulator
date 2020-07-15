@@ -1,5 +1,8 @@
-from typing import List
 from random import random
+from typing import List
+import pandas as pd
+import datetime
+import time
 
 
 class OthelloBoard:
@@ -368,7 +371,11 @@ class ArtificialIntelligence:
 
         return my_stone_count - your_stone_count
 
-    def nega_alpha(self, now_depth: int, now_board: 'OthelloBoard', alpha: int, beta: int) -> (int, int):
+    def nega_alpha(self,
+                   now_depth: int,
+                   now_board: 'OthelloBoard',
+                   alpha: int = 10**10 * -1,
+                   beta: int = 10**10) -> (int, int):
         """
         ネガアルファ法で最善手を探索する関数。
 
@@ -423,3 +430,71 @@ class ArtificialIntelligence:
             return alpha, best_put
         else:
             return -alpha, best_put
+
+
+class GameRecord:
+    """
+    オセロの対局の各種データを記録するためのクラス。
+    TODO 実装途中の暫定版
+
+    """
+    def __init__(self):
+        self.record: List[List[int]] = []
+        self.score: List[List[int]] = []
+
+    def write(self, board: 'OthelloBoard'):
+        # 自分の石の数
+        my_stone_count: int = bin(board.my_stone).count('1')
+        # 相手の石の数
+        your_stone_count: int = bin(board.your_stone).count('1')
+        # 現在のターン数
+        turn: int = len(self.record) + 1
+        # 石の数の差
+        stone_diff: int = my_stone_count - your_stone_count
+        # 全マスの評価値の合計(評価関数未実装のため暫定)
+        square_value: int = 0
+        # 合法手の数
+        legal_num: int = bin(board.get_legal_board()).count('1')
+        # 開放度(関数未実装のため暫定)
+        open_num: int = 0
+        # 自分の確定石の数(関数未実装のため暫定)
+        my_confirm: int = 0
+        # 相手の確定石の数(関数未実装のため暫定)
+        your_confirm: int = 0
+
+        # 各マスの状態を表すリスト 1は黒、-1は白、0は空白を表す
+        now_score: List[int] = [0 for _ in range(64)]
+        # ビットマスク用の変数
+        mask: int = 0x80_00_00_00_00_00_00_00
+        for i in range(64):
+            if board.my_stone & (mask >> i) != 0:
+                now_score[i] = 1
+            elif board.your_stone & (mask >> i) != 0:
+                now_score[i] = -1
+
+        self.record.append([turn, stone_diff, square_value, legal_num, open_num, my_confirm, your_confirm])
+        self.score.append(now_score)
+
+    def save(self):
+        # recordの列名
+        record_columns = ['turn', 'stone_diff', 'square_value', 'legal_num', 'open_num', 'my_confirm', 'your_confirm']
+        # scoreの列名
+        score_columns = ['a1', 'b1', 'c1', 'd1', 'e1', 'f1', 'g1', 'h1',
+                         'a2', 'b2', 'c2', 'd2', 'e2', 'f2', 'g2', 'h2',
+                         'a3', 'b3', 'c3', 'd3', 'e3', 'f3', 'g3', 'h3',
+                         'a4', 'b4', 'c4', 'd4', 'e4', 'f4', 'g4', 'h4',
+                         'a5', 'b5', 'c5', 'd5', 'e5', 'f5', 'g5', 'h5',
+                         'a6', 'b6', 'c6', 'd6', 'e6', 'f6', 'g6', 'h6',
+                         'a7', 'b7', 'c7', 'd7', 'e7', 'f7', 'g7', 'h7',
+                         'a8', 'b8', 'c8', 'd8', 'e8', 'f8', 'g8', 'h8']
+        # recordをpandas.DataFrameに変換
+        pd_record = pd.DataFrame(self.record, columns=record_columns).set_index('turn')
+        # scoreをpandas.DataFrameに変換
+        pd_score = pd.DataFrame(self.score, columns=score_columns)
+        # 現在の年月
+        now_date = datetime.datetime.now().strftime('%Y%m%d')
+        # 現在のエポック秒の下4桁
+        now_millis = str(time.time() // 1 % 10000)
+
+        pd_record.to_csv(f'data/record/{now_date}{now_millis}.csv')
+        pd_score.to_csv(f'data/score/{now_date}{now_millis}.csv')
