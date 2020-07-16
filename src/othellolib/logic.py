@@ -15,15 +15,19 @@ class OthelloBoard:
     :type your_stone: int
     :param now_turn: 現在の手番
     :type now_turn: int
+    :param last_rev: 最後に反転した石の位置
+    :type last_rev: int
     """
 
     def __init__(self,
                  my_stone: int = 0x00_00_00_08_10_00_00_00,
                  your_stone: int = 0x00_00_00_10_08_00_00_00,
-                 now_turn: bool = True,):
+                 now_turn: bool = True,
+                 last_rev: int = 0):
         self.my_stone: int = my_stone
         self.your_stone: int = your_stone
         self.now_turn: bool = now_turn
+        self.last_rev: int = last_rev
 
     def can_put(self, put: int) -> bool:
         """
@@ -67,6 +71,8 @@ class OthelloBoard:
         # 石を反転
         self.my_stone ^= put | rev
         self.your_stone ^= rev
+        # 最後に反転した石の位置を更新
+        self.last_rev = rev
 
         return True
 
@@ -80,7 +86,7 @@ class OthelloBoard:
         :rtype: OthelloBoard
         """
         # 新たにOthelloBoardのインスタンスを生成し、盤面の反転処理を行う
-        reversed_board: OthelloBoard = OthelloBoard(self.my_stone, self.your_stone, self.now_turn)
+        reversed_board: OthelloBoard = OthelloBoard(self.my_stone, self.your_stone, self.now_turn, self.last_rev)
         reversed_board.reverse(put)
 
         return reversed_board
@@ -126,6 +132,40 @@ class OthelloBoard:
         white_stone = self.your_stone if self.now_turn else self.my_stone
 
         return black_stone, white_stone
+
+    def get_open_num(self) -> int:
+        """
+        最後に指した手の開放度を返す関数。
+
+        :return: 最後に指した手の開放度
+        """
+        # 空きマス
+        blank_board: int = ~(self.my_stone | self.your_stone) & 0xff_ff_ff_ff_ff_ff_ff_ff
+        # 最後に反転した石の周囲の空きマス
+        open_board: int = 0
+
+        # 8方向を順に探索
+        # 左
+        open_board |= blank_board & (self.last_rev << 1)
+        # 右
+        open_board |= blank_board & (self.last_rev >> 1)
+        # 上
+        open_board |= blank_board & (self.last_rev << 8)
+        # 下
+        open_board |= blank_board & (self.last_rev >> 8)
+        # 左上
+        open_board |= blank_board & (self.last_rev << 9)
+        # 右上
+        open_board |= blank_board & (self.last_rev << 7)
+        # 左下
+        open_board |= blank_board & (self.last_rev >> 7)
+        # 右下
+        open_board |= blank_board & (self.last_rev >> 9)
+
+        # 最後に指した手の開放度
+        open_num = bin(open_board).count('1')
+
+        return open_num
 
     def get_legal_board(self, my_stone: int = None, your_stone: int = None) -> int:
         """
@@ -558,8 +598,8 @@ class GameRecord:
             self.ai_black.eval_square(self.board) if self.board.now_turn else self.ai_white.eval_square(self.board)
         # 合法手の数
         legal_num: int = bin(self.board.get_legal_board()).count('1')
-        # 開放度(TODO 関数未実装のため暫定)
-        open_num: int = 0
+        # 開放度
+        open_num: int = self.board.get_open_num()
         # 自分の確定石の数
         my_confirm: int = bin(self.board.get_confirm(True)).count('1')
         # 相手の確定石の数
