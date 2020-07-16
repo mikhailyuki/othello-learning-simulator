@@ -149,7 +149,7 @@ class OthelloBoard:
         horizontal_sentinel: int = your_stone & 0x7e_7e_7e_7e_7e_7e_7e_7e
         # 上下端の番兵
         vertical_sentinel: int = your_stone & 0x00_ff_ff_ff_ff_ff_ff_00
-        # 全辺の番兵
+        # 四辺の番兵
         all_side_sentinel: int = your_stone & 0x00_7e_7e_7e_7e_7e_7e_00
         # 空きマス
         blank_board: int = ~(my_stone | your_stone)
@@ -252,6 +252,66 @@ class OthelloBoard:
 
         return legal_list
 
+    def get_confirm(self, flag: bool) -> int:
+        """
+        四辺上の確定石の位置を返す関数。
+
+        :param flag: Trueなら自分の確定石を、Falseなら相手の確定石を探索する。
+        :rtype flag: bool
+        :return: 確定石の位置
+        :rtype: int
+        """
+        # 石の位置
+        stone = self.my_stone if flag else self.your_stone
+        # 四辺上の石のみ探索対象とする
+        all_side_stone: int = stone & 0xff_81_81_81_81_81_81_ff
+        # 探索用の一時変数
+        tmp: int
+        # 確定石の位置
+        confirm: int = 0
+
+        # 上辺と下辺の左端から探索
+        tmp = all_side_stone & 0x80_00_00_00_00_00_00_80
+        tmp |= all_side_stone & (tmp >> 1)
+        tmp |= all_side_stone & (tmp >> 1)
+        tmp |= all_side_stone & (tmp >> 1)
+        tmp |= all_side_stone & (tmp >> 1)
+        tmp |= all_side_stone & (tmp >> 1)
+        tmp |= all_side_stone & (tmp >> 1)
+        confirm |= tmp
+
+        # 上辺と下辺の右端から探索
+        tmp = all_side_stone & 0x01_00_00_00_00_00_00_01
+        tmp |= all_side_stone & (tmp << 1)
+        tmp |= all_side_stone & (tmp << 1)
+        tmp |= all_side_stone & (tmp << 1)
+        tmp |= all_side_stone & (tmp << 1)
+        tmp |= all_side_stone & (tmp << 1)
+        tmp |= all_side_stone & (tmp << 1)
+        confirm |= tmp
+
+        # 左辺と右辺の上端から探索
+        tmp = all_side_stone & 0x81_00_00_00_00_00_00_00
+        tmp |= all_side_stone & (tmp >> 8)
+        tmp |= all_side_stone & (tmp >> 8)
+        tmp |= all_side_stone & (tmp >> 8)
+        tmp |= all_side_stone & (tmp >> 8)
+        tmp |= all_side_stone & (tmp >> 8)
+        tmp |= all_side_stone & (tmp >> 8)
+        confirm |= tmp
+
+        # 左辺と右辺の下端から探索
+        tmp = all_side_stone & 0x00_00_00_00_00_00_00_81
+        tmp |= all_side_stone & (tmp << 8)
+        tmp |= all_side_stone & (tmp << 8)
+        tmp |= all_side_stone & (tmp << 8)
+        tmp |= all_side_stone & (tmp << 8)
+        tmp |= all_side_stone & (tmp << 8)
+        tmp |= all_side_stone & (tmp << 8)
+        confirm |= tmp
+
+        return confirm
+
     def print_board(self):
         """
         与えられた盤面をコンソールに出力する関数。
@@ -331,10 +391,16 @@ class ArtificialIntelligence:
 
     :param think_depth: AIの読みの深さ
     :type think_depth: int
+    :param square_value: 各マスの評価値
+    :type square_value: List[int]
+    :type think_depth: int
     """
 
-    def __init__(self, think_depth: int):
+    def __init__(self,
+                 think_depth: int,
+                 square_value: List[int]):
         self.think_depth: int = think_depth
+        self.square_value: List[int] = square_value
 
     def random(self, now_board: 'OthelloBoard') -> int:
         """
@@ -355,7 +421,30 @@ class ArtificialIntelligence:
 
         return legal_list[random_num]
 
-    def evaluate_board(self, now_board: 'OthelloBoard') -> int:
+    def eval_square(self, now_board: 'OthelloBoard') -> int:
+        """
+        与えられた盤面のマス評価値の合計を返す関数。
+
+        :param now_board: 盤面の情報
+        :type now_board: OthelloBoard
+        :return: マス評価値の合計
+        :rtype: int
+        """
+        # マス評価値の合計
+        square_value_sum: int = 0
+        # ビットマスク用の変数
+        mask: int = 0x80_00_00_00_00_00_00_00
+
+        for i in range(64):
+            tmp_mask: int = mask >> i
+            if now_board.my_stone & tmp_mask != 0:
+                square_value_sum += self.square_value[i]
+            elif now_board.your_stone & tmp_mask != 0:
+                square_value_sum -= self.square_value[i]
+
+        return square_value_sum
+
+    def eval_board(self, now_board: 'OthelloBoard') -> int:
         """
         与えられた盤面の評価値を返す関数。
 
@@ -364,12 +453,13 @@ class ArtificialIntelligence:
         :return: 盤面の評価値
         :rtype: int
         """
-        # 自分の石の個数
-        my_stone_count: int = bin(now_board.my_stone).count('1')
-        # 相手の石の個数
-        your_stone_count: int = bin(now_board.your_stone).count('1')
+        # TODO 暫定版
+        # 評価値
+        value: int = 0
+        # マス評価値の合計を加算
+        value += self.eval_square(now_board)
 
-        return my_stone_count - your_stone_count
+        return value
 
     def nega_alpha(self,
                    now_depth: int,
@@ -394,7 +484,7 @@ class ArtificialIntelligence:
 
         # 探索木の末端か終局まで到達したら、盤面の評価値にマイナスをかけた値を返す
         if now_depth == self.think_depth or now_board.is_end():
-            value: int = self.evaluate_board(now_board)
+            value: int = self.eval_board(now_board)
             return -value, best_put
 
         # 合法手のリストを取得する
@@ -437,64 +527,92 @@ class GameRecord:
     オセロの対局の各種データを記録するためのクラス。
     TODO 実装途中の暫定版
 
+    :param board: 盤面のインスタンス
+    :type board: OthelloBoard
+    :param ai_black: 黒番のAIのインスタンス
+    :type ai_black: ArtificialIntelligence
+    :param ai_white: 白番のAIのインスタンス
+    :type ai_white: ArtificialIntelligence
     """
-    def __init__(self):
+    def __init__(self,
+                 board: 'OthelloBoard',
+                 ai_black: 'ArtificialIntelligence',
+                 ai_white: 'ArtificialIntelligence'):
+        self.board: 'OthelloBoard' = board
+        self.ai_black: 'ArtificialIntelligence' = ai_black
+        self.ai_white: 'ArtificialIntelligence' = ai_white
         self.record: List[List[int]] = []
         self.score: List[List[int]] = []
 
-    def write(self, board: 'OthelloBoard'):
+    def write(self):
         # 自分の石の数
-        my_stone_count: int = bin(board.my_stone).count('1')
+        my_stone_count: int = bin(self.board.my_stone).count('1')
         # 相手の石の数
-        your_stone_count: int = bin(board.your_stone).count('1')
+        your_stone_count: int = bin(self.board.your_stone).count('1')
         # 現在のターン数
         turn: int = len(self.record) + 1
         # 石の数の差
         stone_diff: int = my_stone_count - your_stone_count
-        # 全マスの評価値の合計(評価関数未実装のため暫定)
-        square_value: int = 0
+        # 全マスの評価値の合計
+        square_value: int = \
+            self.ai_black.eval_square(self.board) if self.board.now_turn else self.ai_white.eval_square(self.board)
         # 合法手の数
-        legal_num: int = bin(board.get_legal_board()).count('1')
-        # 開放度(関数未実装のため暫定)
+        legal_num: int = bin(self.board.get_legal_board()).count('1')
+        # 開放度(TODO 関数未実装のため暫定)
         open_num: int = 0
-        # 自分の確定石の数(関数未実装のため暫定)
-        my_confirm: int = 0
-        # 相手の確定石の数(関数未実装のため暫定)
-        your_confirm: int = 0
+        # 自分の確定石の数
+        my_confirm: int = bin(self.board.get_confirm(True)).count('1')
+        # 相手の確定石の数
+        your_confirm: int = bin(self.board.get_confirm(False)).count('1')
 
         # 各マスの状態を表すリスト 1は黒、-1は白、0は空白を表す
-        now_score: List[int] = [0 for _ in range(64)]
+        now_score: List[int] = [0 for _ in range(66)]
+        # 現在のターン数を反映
+        now_score[0] = turn
         # ビットマスク用の変数
         mask: int = 0x80_00_00_00_00_00_00_00
         for i in range(64):
-            if board.my_stone & (mask >> i) != 0:
-                now_score[i] = 1
-            elif board.your_stone & (mask >> i) != 0:
-                now_score[i] = -1
+            if self.board.my_stone & (mask >> i) != 0:
+                now_score[i + 1] = 1
+            elif self.board.your_stone & (mask >> i) != 0:
+                now_score[i + 1] = -1
 
-        self.record.append([turn, stone_diff, square_value, legal_num, open_num, my_confirm, your_confirm])
+        self.record.append([turn, stone_diff, square_value, legal_num, open_num, my_confirm, your_confirm, 0])
         self.score.append(now_score)
 
     def save(self):
+        # 最終ターン(0-index)
+        last_turn = len(self.record)
+        # 対局の結果
+        result = self.board.judge()
+        for i in range(last_turn):
+            if i % 2 == last_turn % 2:
+                self.record[i][7] = result
+                self.score[i][65] = result
+            else:
+                self.record[i][7] = result * -1
+                self.score[i][65] = result * -1
+
         # recordの列名
-        record_columns = ['turn', 'stone_diff', 'square_value', 'legal_num', 'open_num', 'my_confirm', 'your_confirm']
+        record_columns = ['turn', 'stone_diff', 'square_value', 'legal_num',
+                          'open_num', 'my_confirm', 'your_confirm', 'winner']
         # scoreの列名
-        score_columns = ['a1', 'b1', 'c1', 'd1', 'e1', 'f1', 'g1', 'h1',
+        score_columns = ['turn',
+                         'a1', 'b1', 'c1', 'd1', 'e1', 'f1', 'g1', 'h1',
                          'a2', 'b2', 'c2', 'd2', 'e2', 'f2', 'g2', 'h2',
                          'a3', 'b3', 'c3', 'd3', 'e3', 'f3', 'g3', 'h3',
                          'a4', 'b4', 'c4', 'd4', 'e4', 'f4', 'g4', 'h4',
                          'a5', 'b5', 'c5', 'd5', 'e5', 'f5', 'g5', 'h5',
                          'a6', 'b6', 'c6', 'd6', 'e6', 'f6', 'g6', 'h6',
                          'a7', 'b7', 'c7', 'd7', 'e7', 'f7', 'g7', 'h7',
-                         'a8', 'b8', 'c8', 'd8', 'e8', 'f8', 'g8', 'h8']
+                         'a8', 'b8', 'c8', 'd8', 'e8', 'f8', 'g8', 'h8',
+                         'winner']
         # recordをpandas.DataFrameに変換
-        pd_record = pd.DataFrame(self.record, columns=record_columns).set_index('turn')
+        df_record = pd.DataFrame(self.record, columns=record_columns).set_index('turn')
         # scoreをpandas.DataFrameに変換
-        pd_score = pd.DataFrame(self.score, columns=score_columns)
-        # 現在の年月
-        now_date = datetime.datetime.now().strftime('%Y%m%d')
-        # 現在のエポック秒の下4桁
-        now_millis = str(time.time() // 1 % 10000)
+        df_score = pd.DataFrame(self.score, columns=score_columns).set_index('turn')
+        # 現在時刻をファイル名に適用する
+        file_name = datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')
 
-        pd_record.to_csv(f'data/record/{now_date}{now_millis}.csv')
-        pd_score.to_csv(f'data/score/{now_date}{now_millis}.csv')
+        df_record.to_csv(f'data/record/record_{file_name}.csv')
+        df_score.to_csv(f'data/score/score_{file_name}.csv')
