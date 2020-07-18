@@ -396,6 +396,24 @@ class OthelloBoard:
         self.my_stone, self.your_stone = self.your_stone, self.my_stone
         self.now_turn = not self.now_turn
 
+    def before_turn(self):
+        """
+        盤面を直前の手番の状態に戻す関数。
+
+        """
+        # 1手目の場合処理しない
+        if len(self.put_list) == 1:
+            return
+
+        self.my_stone, self.your_stone = self.your_stone, self.my_stone
+        self.now_turn = not self.now_turn
+        # 直前に石を置いた位置
+        last_put = self.put_list.pop()
+        # 直前に反転した石の位置
+        last_rev = self.rev_list.pop()
+        self.my_stone = self.my_stone ^ (last_put | last_rev)
+        self.your_stone = self.your_stone ^ last_rev
+
     def is_end(self) -> bool:
         """
         終局判定を行う関数。
