@@ -5,30 +5,6 @@ import numpy as np
 import datetime
 
 
-# 16bit分の整数のpopcountを事前計算したもの
-_popcount_table = np.zeros(2 ** 16, dtype=np.int)
-# 事前計算
-for i in range(len(_popcount_table)):
-    _popcount_table[i] = (i & 1) + _popcount_table[i >> 1]
-
-
-def popcount(num: int) -> int:
-    """
-    与えられた整数のpopcountを返す関数。
-
-    :param num: popcountを求めたい整数
-    :type num: int
-    :return: 引数numのpopcount
-    :rtype: int
-    """
-    count = _popcount_table[num & 0xffff]
-    count += _popcount_table[(num >> 16) & 0xffff]
-    count += _popcount_table[(num >> 32) & 0xffff]
-    count += _popcount_table[(num >> 48) & 0xffff]
-
-    return count
-
-
 class OthelloBoard:
     """
     オセロの盤面情報の保持と各種処理を行うクラス。
@@ -39,19 +15,17 @@ class OthelloBoard:
     :type your_stone: int
     :param now_turn: 現在の手番
     :type now_turn: int
-    :param last_rev: 最後に反転した石の位置
-    :type last_rev: int
     """
 
     def __init__(self,
                  my_stone: int = 0x00_00_00_08_10_00_00_00,
                  your_stone: int = 0x00_00_00_10_08_00_00_00,
-                 now_turn: bool = True,
-                 last_rev: int = 0):
+                 now_turn: bool = True):
         self.my_stone: int = my_stone
         self.your_stone: int = your_stone
         self.now_turn: bool = now_turn
-        self.last_rev: int = last_rev
+        self.put_list: List[int] = [0]
+        self.rev_list: List[int] = [0]
 
     def can_put(self, put: int) -> bool:
         """
@@ -95,8 +69,10 @@ class OthelloBoard:
         # 石を反転
         self.my_stone ^= put | rev
         self.your_stone ^= rev
-        # 最後に反転した石の位置を更新
-        self.last_rev = rev
+        # 石を置いた位置を記録
+        self.put_list.append(put)
+        # 反転した石の位置を記録
+        self.rev_list.append(rev)
 
         return True
 
@@ -110,7 +86,7 @@ class OthelloBoard:
         :rtype: OthelloBoard
         """
         # 新たにOthelloBoardのインスタンスを生成し、盤面の反転処理を行う
-        reversed_board: OthelloBoard = OthelloBoard(self.my_stone, self.your_stone, self.now_turn, self.last_rev)
+        reversed_board: OthelloBoard = OthelloBoard(self.my_stone, self.your_stone, self.now_turn)
         reversed_board.reverse(put)
 
         return reversed_board
@@ -165,29 +141,31 @@ class OthelloBoard:
         """
         # 空きマス
         blank_board: int = ~(self.my_stone | self.your_stone) & 0xff_ff_ff_ff_ff_ff_ff_ff
+        # 最後に反転した石の位置
+        last_rev: int = self.rev_list[-1]
         # 最後に反転した石の周囲の空きマス
         open_board: int = 0
 
         # 8方向を順に探索
         # 左
-        open_board |= blank_board & (self.last_rev << 1)
+        open_board |= blank_board & (last_rev << 1)
         # 右
-        open_board |= blank_board & (self.last_rev >> 1)
+        open_board |= blank_board & (last_rev >> 1)
         # 上
-        open_board |= blank_board & (self.last_rev << 8)
+        open_board |= blank_board & (last_rev << 8)
         # 下
-        open_board |= blank_board & (self.last_rev >> 8)
+        open_board |= blank_board & (last_rev >> 8)
         # 左上
-        open_board |= blank_board & (self.last_rev << 9)
+        open_board |= blank_board & (last_rev << 9)
         # 右上
-        open_board |= blank_board & (self.last_rev << 7)
+        open_board |= blank_board & (last_rev << 7)
         # 左下
-        open_board |= blank_board & (self.last_rev >> 7)
+        open_board |= blank_board & (last_rev >> 7)
         # 右下
-        open_board |= blank_board & (self.last_rev >> 9)
+        open_board |= blank_board & (last_rev >> 9)
 
         # 最後に指した手の開放度
-        open_num = popcount(open_board)
+        open_num = bin(open_board).count('1')
 
         return open_num
 
@@ -438,8 +416,8 @@ class OthelloBoard:
         :rtype: int
         """
         # 石の数
-        my_stone_count: int = popcount(self.my_stone)
-        your_stone_count: int = popcount(self.your_stone)
+        my_stone_count: int = bin(self.my_stone).count('1')
+        your_stone_count: int = bin(self.your_stone).count('1')
 
         if my_stone_count > your_stone_count:
             return 1
@@ -609,9 +587,9 @@ class GameRecord:
 
     def write(self):
         # 自分の石の数
-        my_stone_count: int = popcount(self.board.my_stone)
+        my_stone_count: int = bin(self.board.my_stone).count('1')
         # 相手の石の数
-        your_stone_count: int = popcount(self.board.your_stone)
+        your_stone_count: int = bin(self.board.your_stone).count('1')
         # 現在のターン数
         turn: int = len(self.record) + 1
         # 石の数の差
@@ -620,13 +598,13 @@ class GameRecord:
         square_value: int = \
             self.ai_black.eval_square(self.board) if self.board.now_turn else self.ai_white.eval_square(self.board)
         # 合法手の数
-        legal_num: int = popcount(self.board.get_legal_board())
+        legal_num: int = bin(self.board.get_legal_board()).count('1')
         # 開放度
         open_num: int = self.board.get_open_num()
         # 自分の確定石の数
-        my_confirm: int = popcount(self.board.get_confirm(True))
+        my_confirm: int = bin(self.board.get_confirm(True)).count('1')
         # 相手の確定石の数
-        your_confirm: int = popcount(self.board.get_confirm(False))
+        your_confirm: int = bin(self.board.get_confirm(False)).count('1')
 
         # 各マスの状態を表すリスト 1は黒、-1は白、0は空白を表す
         now_score: List[int] = [0 for _ in range(66)]
