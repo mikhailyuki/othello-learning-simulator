@@ -169,23 +169,18 @@ class OthelloBoard:
 
         return open_num
 
-    def get_legal_board(self, my_stone: int = None, your_stone: int = None) -> int:
+    def get_legal_board(self, flag: bool = True) -> int:
         """
-        与えられた盤面における合法手の位置を返す関数。
-        引数が渡されなかった場合、メンバ変数の値がそのまま使われる。
+        現在の盤面における合法手の位置を返す関数。
 
-        :param my_stone: 自分の石の位置
-        :type my_stone: Optional[int]
-        :param your_stone: 相手の石の位置
-        :type your_stone: Optional[int]
+        :param flag: Trueなら自分の合法手を、Falseなら相手の合法手を返す。
+        :type flag: bool
         :return: 合法手の位置
         :rtype: int
         """
-        # 引数が与えられなかった場合、メンバ変数のmy_stoneとyour_stoneがそのまま使われる
-        if my_stone is None:
-            my_stone = self.my_stone
-        if your_stone is None:
-            your_stone = self.your_stone
+        # flagの値によって視点を変える
+        my_stone = self.my_stone if flag else self.your_stone
+        your_stone = self.your_stone if flag else self.my_stone
 
         # 左右端の番兵
         horizontal_sentinel: int = your_stone & 0x7e_7e_7e_7e_7e_7e_7e_7e
@@ -275,15 +270,15 @@ class OthelloBoard:
 
         return legal_board
 
-    def get_legal_list(self) -> List[int]:
+    def get_legal_list(self, flag: bool = True) -> List[int]:
         """
         現在の盤面における合法手の位置を格納したリストを返す関数。
 
-        :return: 合法手の位置を格納したリスト
+        :return: 合法手の位置を格納したリスト。Trueなら自分の合法手を、Falseなら相手の合法手を返す。
         :rtype: List[int]
         """
         # 全ての合法手の位置を表すビット
-        legal_board: int = self.get_legal_board()
+        legal_board: int = self.get_legal_board(flag)
         # 合法手の位置を格納するリスト
         legal_list: List[int] = []
         # マスク用の変数 左上から右下まで順に1ビットずつ遷移していく
@@ -432,8 +427,8 @@ class OthelloBoard:
         :return: 互いに合法手が存在しなければTrueを返す
         :rtype: bool
         """
-        flag1 = self.get_legal_board(self.your_stone, self.my_stone)
-        flag2 = self.get_legal_board()
+        flag1 = self.get_legal_board()
+        flag2 = self.get_legal_board(False)
 
         return flag1 == 0 and flag2 == 0
 
