@@ -69,27 +69,15 @@ class OthelloBoard:
         # 石を反転
         self.my_stone ^= put | rev
         self.your_stone ^= rev
+        # 手番を交代
+        self.my_stone, self.your_stone = self.your_stone, self.my_stone
+        self.now_turn = not self.now_turn
         # 石を置いた位置を記録
         self.put_list.append(put)
         # 反転した石の位置を記録
         self.rev_list.append(rev)
 
         return True
-
-    def reversed(self, put: int) -> 'OthelloBoard':
-        """
-        指定された位置に石を置き、反転処理を行った盤面を返す関数。
-
-        :param put: 石を置く位置
-        :type put: int
-        :return: 反転処理をした盤面
-        :rtype: OthelloBoard
-        """
-        # 新たにOthelloBoardのインスタンスを生成し、盤面の反転処理を行う
-        reversed_board: OthelloBoard = OthelloBoard(self.my_stone, self.your_stone, self.now_turn)
-        reversed_board.reverse(put)
-
-        return reversed_board
 
     def transfer(self, put: int, k: int) -> int:
         """
@@ -289,7 +277,7 @@ class OthelloBoard:
 
         return legal_list
 
-    def get_confirm(self, flag: bool) -> int:
+    def get_confirm(self, flag: bool = True) -> int:
         """
         四辺上の確定石の位置を返す関数。
 
@@ -383,19 +371,12 @@ class OthelloBoard:
                     print('　', end='')
             print('')
 
-    def change_turn(self):
-        """
-        手番の交代処理を行う関数。
-
-        """
-        self.my_stone, self.your_stone = self.your_stone, self.my_stone
-        self.now_turn = not self.now_turn
-
     def pass_turn(self):
         """
         手番のパス処理を行う関数。
 
         """
+        # 手番を交代
         self.my_stone, self.your_stone = self.your_stone, self.my_stone
         self.now_turn = not self.now_turn
         # 各dequeには0をpushする
@@ -410,15 +391,15 @@ class OthelloBoard:
         # 1手目の場合処理しない
         if len(self.put_list) == 1:
             return
-
+        # 手番を変える
         self.my_stone, self.your_stone = self.your_stone, self.my_stone
         self.now_turn = not self.now_turn
         # 直前に石を置いた位置
         last_put = self.put_list.pop()
         # 直前に反転した石の位置
         last_rev = self.rev_list.pop()
-        self.my_stone = self.my_stone ^ (last_put | last_rev)
-        self.your_stone = self.your_stone ^ last_rev
+        self.my_stone ^= last_put | last_rev
+        self.your_stone ^= last_rev
 
     def is_end(self) -> bool:
         """
@@ -501,12 +482,13 @@ class ArtificialIntelligence:
         # ビットマスク用の変数
         mask: int = 0x80_00_00_00_00_00_00_00
 
+        # 石の位置から評価値を算出する
         for i in range(64):
             tmp_mask: int = mask >> i
             if now_board.my_stone & tmp_mask != 0:
-                square_value_sum += self.square_value[i]
-            elif now_board.your_stone & tmp_mask != 0:
                 square_value_sum -= self.square_value[i]
+            elif now_board.your_stone & tmp_mask != 0:
+                square_value_sum += self.square_value[i]
 
         return square_value_sum
 
@@ -548,31 +530,33 @@ class ArtificialIntelligence:
         """
         best_put: int = -1
 
-        # 探索木の末端か終局まで到達したら、盤面の評価値にマイナスをかけた値を返す
+        # 探索木の末端か終局まで到達したら盤面の評価値を返す(前の手番から見た評価値なのでマイナスをかける必要はない)
         if now_depth == self.think_depth or now_board.is_end():
             value: int = self.eval_board(now_board)
-            return -value, best_put
+            return value, best_put
 
         # 合法手のリストを取得する
         legal_list: List[int] = now_board.get_legal_list()
         # 合法手が存在しなければパスして次の手番へ
         if len(legal_list) == 0:
-            # 新たに盤面のインスタンスを生成し、手番の交代処理を行う
-            next_board: OthelloBoard = OthelloBoard(now_board.my_stone, now_board.your_stone)
-            next_board.change_turn()
+            # パス処理をする
+            now_board.pass_turn()
             # 子ノードの評価値を再帰で取得する(alphaとbetaの値はそのまま渡す)
-            child_value, _ = self.nega_alpha(now_depth + 1, next_board, alpha, beta)
+            child_value, _ = self.nega_alpha(now_depth + 1, now_board, alpha, beta)
+            # 元の盤面に戻す
+            now_board.before_turn()
             # alphaの更新を行う
             alpha = max(alpha, child_value)
             return -alpha, best_put
 
         # 合法手全てに枝を張る
         for legal_put in legal_list:
-            # 石の反転処理がされた盤面のインスタンスを生成し、手番の交代処理を行う
-            next_board: OthelloBoard = now_board.reversed(legal_put)
-            next_board.change_turn()
+            # 石の反転処理をする
+            now_board.reverse(legal_put)
             # 子ノードの評価値を再帰で取得する
-            child_value, _ = self.nega_alpha(now_depth + 1, next_board, -beta, -alpha)
+            child_value, _ = self.nega_alpha(now_depth + 1, now_board, -beta, -alpha)
+            # 元の盤面に戻す
+            now_board.before_turn()
             # 子ノードの評価値がalpha(下限)を超えていればalphaを更新し、現在着目している手を最善手とする
             if child_value > alpha:
                 alpha = child_value
@@ -610,10 +594,19 @@ class GameRecord:
         self.score: List[List[int]] = []
 
     def write(self):
+        """
+        現在の盤面のデータを記録する。
+
+        """
+        # 石の反転処理やパス処理を行った後に呼び出すことを想定しているので、視点は逆で見る。
+        # 自分の石の位置
+        my_stone = self.board.your_stone
+        # 相手の石の位置
+        your_stone = self.board.my_stone
         # 自分の石の数
-        my_stone_count: int = bin(self.board.my_stone).count('1')
+        my_stone_count: int = bin(my_stone).count('1')
         # 相手の石の数
-        your_stone_count: int = bin(self.board.your_stone).count('1')
+        your_stone_count: int = bin(your_stone).count('1')
         # 現在のターン数
         turn: int = len(self.record) + 1
         # 石の数の差
@@ -622,15 +615,15 @@ class GameRecord:
         square_value: int = \
             self.ai_black.eval_square(self.board) if self.board.now_turn else self.ai_white.eval_square(self.board)
         # 自分の合法手の数
-        my_legal: int = bin(self.board.get_legal_board()).count('1')
+        my_legal: int = bin(self.board.get_legal_board(False)).count('1')
         # 相手の合法手の数
-        your_legal: int = bin(self.board.get_legal_board(False)).count('1')
+        your_legal: int = bin(self.board.get_legal_board()).count('1')
         # 開放度
         open_num: int = self.board.get_open_num()
         # 自分の確定石の数
-        my_confirm: int = bin(self.board.get_confirm(True)).count('1')
+        my_confirm: int = bin(self.board.get_confirm(False)).count('1')
         # 相手の確定石の数
-        your_confirm: int = bin(self.board.get_confirm(False)).count('1')
+        your_confirm: int = bin(self.board.get_confirm()).count('1')
 
         # 各マスの状態を表すリスト 1は黒、-1は白、0は空白を表す
         now_score: List[int] = [0 for _ in range(66)]
@@ -639,9 +632,9 @@ class GameRecord:
         # ビットマスク用の変数
         mask: int = 0x80_00_00_00_00_00_00_00
         for i in range(64):
-            if self.board.my_stone & (mask >> i) != 0:
+            if my_stone & (mask >> i) != 0:
                 now_score[i + 1] = 1
-            elif self.board.your_stone & (mask >> i) != 0:
+            elif your_stone & (mask >> i) != 0:
                 now_score[i + 1] = -1
 
         self.record.append([turn, stone_diff, square_value, my_legal, your_legal,
