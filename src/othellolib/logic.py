@@ -621,8 +621,10 @@ class GameRecord:
         # 全マスの評価値の合計
         square_value: int = \
             self.ai_black.eval_square(self.board) if self.board.now_turn else self.ai_white.eval_square(self.board)
-        # 合法手の数
-        legal_num: int = bin(self.board.get_legal_board()).count('1')
+        # 自分の合法手の数
+        my_legal: int = bin(self.board.get_legal_board()).count('1')
+        # 相手の合法手の数
+        your_legal: int = bin(self.board.get_legal_board(False)).count('1')
         # 開放度
         open_num: int = self.board.get_open_num()
         # 自分の確定石の数
@@ -642,7 +644,8 @@ class GameRecord:
             elif self.board.your_stone & (mask >> i) != 0:
                 now_score[i + 1] = -1
 
-        self.record.append([turn, stone_diff, square_value, legal_num, open_num, my_confirm, your_confirm, 0])
+        self.record.append([turn, stone_diff, square_value, my_legal, your_legal,
+                            open_num, my_confirm, your_confirm, 0])
         self.score.append(now_score)
 
     def save(self):
@@ -652,14 +655,14 @@ class GameRecord:
         result = self.board.judge()
         for i in range(last_turn):
             if i % 2 == last_turn % 2:
-                self.record[i][7] = result
+                self.record[i][8] = result
                 self.score[i][65] = result
             else:
-                self.record[i][7] = result * -1
+                self.record[i][8] = result * -1
                 self.score[i][65] = result * -1
 
         # recordの列名
-        record_columns = ['turn', 'stone_diff', 'square_value', 'legal_num',
+        record_columns = ['turn', 'stone_diff', 'square_value', 'my_legal', 'your_legal',
                           'open_num', 'my_confirm', 'your_confirm', 'winner']
         # scoreの列名
         score_columns = ['turn',
