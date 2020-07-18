@@ -396,6 +396,17 @@ class OthelloBoard:
         self.my_stone, self.your_stone = self.your_stone, self.my_stone
         self.now_turn = not self.now_turn
 
+    def pass_turn(self):
+        """
+        手番のパス処理を行う関数。
+
+        """
+        self.my_stone, self.your_stone = self.your_stone, self.my_stone
+        self.now_turn = not self.now_turn
+        # 各dequeには0をpushする
+        self.put_list.append(0)
+        self.rev_list.append(0)
+
     def before_turn(self):
         """
         盤面を直前の手番の状態に戻す関数。
