@@ -1,8 +1,8 @@
 import random
 from typing import List
 import pandas as pd
-import numpy as np
 import datetime
+from collections import deque
 
 
 class OthelloBoard:
@@ -24,8 +24,8 @@ class OthelloBoard:
         self.my_stone: int = my_stone
         self.your_stone: int = your_stone
         self.now_turn: bool = now_turn
-        self.put_list: List[int] = [0]
-        self.rev_list: List[int] = [0]
+        self.put_list: deque[int] = deque([0])
+        self.rev_list: deque[int] = deque([0])
 
     def can_put(self, put: int) -> bool:
         """
