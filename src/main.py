@@ -1,5 +1,5 @@
 from typing import List
-import src.othellolib as lib
+import logic
 import random
 import sys
 import time
@@ -8,7 +8,7 @@ import time
 def main(loop_num: int = 1):
     for loop_count in range(loop_num):
         # 盤面のインスタンスを生成
-        board = lib.OthelloBoard()
+        board = logic.OthelloBoard()
         # 各手番のマス評価値
         black_square_value: List[int] = [0 for _ in range(64)]
         white_square_value: List[int] = [0 for _ in range(64)]
@@ -17,10 +17,10 @@ def main(loop_num: int = 1):
         #     black_square_value[i] = random.randint(-100, 100)
         #     white_square_value[i] = random.randint(-100, 100)
         # 各手番のAIのインスタンスを生成
-        ai_black = lib.ArtificialIntelligence(4, black_square_value)
-        ai_white = lib.ArtificialIntelligence(3, white_square_value)
+        ai_black = logic.ArtificialIntelligence(4, black_square_value)
+        ai_white = logic.ArtificialIntelligence(3, white_square_value)
         # 対局のデータ記録のインスタンスを生成
-        game_record = lib.GameRecord(board, ai_black, ai_white)
+        game_record = logic.GameRecord(board, ai_black, ai_white)
 
         # 対局
         while not board.is_end():

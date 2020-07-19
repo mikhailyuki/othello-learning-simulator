@@ -675,5 +675,5 @@ class GameRecord:
         # 現在時刻をファイル名に適用する
         file_name = datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')
 
-        df_record.to_csv(f'data/record/record_{file_name}.csv')
-        df_score.to_csv(f'data/score/score_{file_name}.csv')
+        df_record.to_csv(f'../data/record/record_{file_name}.csv')
+        df_score.to_csv(f'../data/score/score_{file_name}.csv')
